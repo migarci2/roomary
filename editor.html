@@ -149,6 +149,8 @@
 
     .button:hover { border-color: #6d6658; background: #2b2924; }
     .button:active { transform: translateY(1px); }
+    .button:disabled { cursor: not-allowed; opacity: .35; transform: none; }
+    .button:disabled:hover { border-color: var(--line); background: transparent; }
 
     .button.primary {
       border-color: var(--accent);
@@ -253,6 +255,15 @@
     }
 
     .new-room:hover { border-color: var(--accent); background: rgba(241, 178, 80, .06); }
+
+    .room-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 7px;
+      margin-top: 7px;
+    }
+
+    .room-actions .button { font-size: 11px; }
 
     .stage {
       position: relative;
@@ -501,6 +512,10 @@
       <p class="section-label">Places</p>
       <nav class="room-list" id="room-list"></nav>
       <button class="button new-room" id="new-room">+ New room</button>
+      <div class="room-actions" aria-label="Selected room actions">
+        <button class="button compact" id="rename-room">Rename</button>
+        <button class="button danger compact" id="delete-room" disabled>Delete</button>
+      </div>
     </aside>
 
     <main class="stage" aria-label="3D room editor">
@@ -596,7 +611,10 @@
     const normalize = (value) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
     const clone = (value) => JSON.parse(JSON.stringify(value));
+    const withoutRoom = (rooms, id) => rooms.filter((room) => room.id !== id);
     const itemFor = (type) => catalog.find((item) => item.type === type);
+
+    console.assert(withoutRoom([{ id: 'keep' }, { id: 'remove' }], 'remove').length === 1, 'Room removal should keep other rooms');
 
     function mentions(text, item) {
       return item.terms.some((term) => new RegExp(`\\b${normalize(term)}s?\\b`, 'i').test(text));
@@ -904,6 +922,7 @@
       $('#room-title').textContent = room.name;
       $('#room-prompt').value = room.description;
       $('#word-count').textContent = `${room.description.trim().split(/\s+/).filter(Boolean).length} words`;
+      $('#delete-room').disabled = state.rooms.length === 1;
 
       $('#room-list').innerHTML = state.rooms.map((item) => `
         <button class="room-item ${item.id === room.id ? 'active' : ''}" data-room-id="${item.id}">
@@ -1052,6 +1071,23 @@
       state.activeRoomId = id;
       persist(); renderRoom();
       $('#room-prompt').focus();
+    });
+
+    $('#rename-room').addEventListener('click', () => {
+      const room = activeRoom();
+      const name = window.prompt('Rename this place', room.name)?.trim();
+      if (!name || name === room.name) return;
+      room.name = name;
+      persist(); syncUI(); toast('Room renamed.');
+    });
+
+    $('#delete-room').addEventListener('click', () => {
+      if (state.rooms.length === 1) { toast('Keep at least one room.'); return; }
+      const room = activeRoom();
+      if (!window.confirm(`Delete “${room.name}”? This cannot be undone.`)) return;
+      state.rooms = withoutRoom(state.rooms, room.id);
+      state.activeRoomId = state.rooms[0].id;
+      persist(); renderRoom(); toast('Room deleted.');
     });
 
     $('#object-chips').addEventListener('click', (event) => {
