@@ -5,17 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Roomary project thumbnail</title>
   <style>
+    @font-face {
+      font-family: "Schoolbell";
+      src: url("fonts/Schoolbell-Regular.ttf") format("truetype");
+      font-display: block;
+    }
+
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; margin: 0; background: #e37544; }
+    html, body { width: 100%; height: 100%; margin: 0; background: #fff; }
 
     #thumbnail {
       position: relative;
       width: 1500px;
       height: 1000px;
       overflow: hidden;
-      color: #fff3dc;
-      background: #e37544;
-      font-family: Comfortaa, "Arial Rounded MT Bold", Arial, sans-serif;
+      color: #111;
+      background: #fff;
+      font-family: "Schoolbell", "Comic Neue", cursive;
     }
 
     .copy {
@@ -31,40 +37,43 @@
       align-items: center;
       gap: 16px;
       margin-bottom: 27px;
-      color: #4b271f;
-      font-size: 18px;
-      font-weight: 700;
-      letter-spacing: .22em;
+      color: #111;
+      font-size: 20px;
+      font-weight: 400;
+      letter-spacing: .16em;
     }
 
     .eyebrow::before {
       width: 52px;
       height: 1px;
-      background: #4b271f;
+      background: #111;
       content: "";
     }
 
     h1 {
       margin: 0;
-      font-family: "Comic Neue", "Comic Sans MS", cursive;
-      font-size: 148px;
-      font-weight: 700;
-      letter-spacing: -.035em;
+      font-family: "Schoolbell", "Comic Neue", cursive;
+      font-size: 168px;
+      font-weight: 400;
+      letter-spacing: .01em;
       line-height: .9;
     }
 
     .tagline {
       width: 610px;
       margin: 30px 0 0 7px;
-      color: #4b271f;
-      font-family: Comfortaa, "Arial Rounded MT Bold", Arial, sans-serif;
-      font-size: 38px;
-      line-height: 1.35;
+      color: #111;
+      font-family: "Schoolbell", "Comic Neue", cursive;
+      font-size: 43px;
+      line-height: 1.28;
     }
 
     .tagline strong {
-      color: #fff3dc;
-      font-weight: 700;
+      padding: 0 .13em;
+      color: #fff;
+      background: #111;
+      border-radius: 3px;
+      font-weight: 400;
     }
 
     .room {
@@ -87,7 +96,7 @@
       <p class="tagline">Turn <strong>written rooms</strong> into <strong>places</strong> you can return to.</p>
     </section>
 
-    <img class="room" src="room-diorama-plain.png" alt="A minimal flat isometric bedroom">
+    <img class="room" src="room-diorama-doodle.png" alt="A hand-drawn black-and-white bedroom doodle">
   </main>
 </body>
 </html>
