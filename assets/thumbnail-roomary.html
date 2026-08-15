@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Roomary project thumbnail</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; background: #e37544; }
+
+    #thumbnail {
+      position: relative;
+      width: 1500px;
+      height: 1000px;
+      overflow: hidden;
+      color: #fff3dc;
+      background: #e37544;
+      font-family: Comfortaa, "Arial Rounded MT Bold", Arial, sans-serif;
+    }
+
+    .copy {
+      position: absolute;
+      top: 320px;
+      left: 84px;
+      z-index: 4;
+      width: 720px;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 27px;
+      color: #4b271f;
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: .22em;
+    }
+
+    .eyebrow::before {
+      width: 52px;
+      height: 1px;
+      background: #4b271f;
+      content: "";
+    }
+
+    h1 {
+      margin: 0;
+      font-family: "Comic Neue", "Comic Sans MS", cursive;
+      font-size: 148px;
+      font-weight: 700;
+      letter-spacing: -.035em;
+      line-height: .9;
+    }
+
+    .tagline {
+      width: 610px;
+      margin: 30px 0 0 7px;
+      color: #4b271f;
+      font-family: Comfortaa, "Arial Rounded MT Bold", Arial, sans-serif;
+      font-size: 38px;
+      line-height: 1.35;
+    }
+
+    .tagline strong {
+      color: #fff3dc;
+      font-weight: 700;
+    }
+
+    .room {
+      position: absolute;
+      top: 110px;
+      right: -15px;
+      z-index: 3;
+      width: 780px;
+      height: 780px;
+      object-fit: contain;
+    }
+
+  </style>
+</head>
+<body>
+  <main id="thumbnail" aria-label="Roomary thumbnail: writing becomes a 3D room">
+    <section class="copy">
+      <div class="eyebrow">A SPATIAL MEMORY FOR WRITERS</div>
+      <h1>Roomary</h1>
+      <p class="tagline">Turn <strong>written rooms</strong> into <strong>places</strong> you can return to.</p>
+    </section>
+
+    <img class="room" src="room-diorama-plain.png" alt="A minimal flat isometric bedroom">
+  </main>
+</body>
+</html>
