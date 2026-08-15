@@ -219,6 +219,26 @@
     .button::after { content: "→"; font-size: 18px; }
     .button.secondary { border-color: var(--line); background: transparent; color: var(--paper); }
 
+    .pixel-button { position: relative; isolation: isolate; }
+
+    .pixel-burst {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .pixel-burst i {
+      position: absolute;
+      top: var(--top);
+      right: var(--right);
+      width: var(--size);
+      aspect-ratio: 1;
+      background: var(--amber-bright);
+      opacity: 0;
+      transform: translate3d(0, 0, 0);
+      will-change: transform, opacity;
+    }
+
     .hero-note {
       display: flex;
       gap: 18px;
@@ -625,11 +645,17 @@
 
     @keyframes write-line { to { stroke-dashoffset: 0; } }
 
+    @keyframes pixel-fly {
+      0% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0deg); }
+      100% { opacity: 0; transform: translate3d(var(--fly-x), var(--fly-y), 0) rotate(var(--turn)); }
+    }
+
     @media (hover: hover) and (pointer: fine) {
       .nav-links a:hover, .text-link:hover { color: var(--amber-bright); }
       .text-link:hover::after { transform: translate(3px, -3px); }
       .button:hover { border-color: var(--amber-bright); background: var(--amber-bright); transform: translateY(-2px); }
       .button.secondary:hover { background: rgba(245,234,210,.06); color: var(--amber-bright); }
+      .pixel-button:hover .pixel-burst i { animation: pixel-fly 700ms var(--ease-out) var(--delay) both; }
       .hero-visual:hover img { transform: scale(1.02); }
       .process-tab:hover { color: var(--paper); transform: translateX(5px); }
     }
@@ -683,6 +709,7 @@
       .js .reveal { opacity: 0; transform: none; transition: opacity 200ms ease; }
       .js .reveal.visible { opacity: 1; }
       .button, .text-link::after, .hero-visual img, .process-tab, .stage-object { transition-duration: .01ms; }
+      .pixel-burst { display: none; }
     }
   </style>
 </head>
@@ -706,7 +733,20 @@
         <h1><span>Your story</span><span>has a <em>place.</em></span></h1>
         <p class="hero-lede">Turn a written room into an editable 3D scene. Keep every object, version and quiet continuity detail exactly where your story left it.</p>
         <div class="hero-actions">
-          <a class="button" href="editor.html">Build your first room</a>
+          <a class="button pixel-button" href="editor.html">
+            Build your first room
+            <span class="pixel-burst" aria-hidden="true">
+              <i style="--top:12%;--right:8%;--size:6px;--fly-x:34px;--fly-y:-42px;--turn:70deg;--delay:0ms"></i>
+              <i style="--top:26%;--right:1%;--size:9px;--fly-x:58px;--fly-y:-20px;--turn:-55deg;--delay:35ms"></i>
+              <i style="--top:44%;--right:14%;--size:5px;--fly-x:72px;--fly-y:-6px;--turn:95deg;--delay:70ms"></i>
+              <i style="--top:61%;--right:3%;--size:7px;--fly-x:54px;--fly-y:18px;--turn:-80deg;--delay:20ms"></i>
+              <i style="--top:78%;--right:10%;--size:10px;--fly-x:38px;--fly-y:42px;--turn:60deg;--delay:55ms"></i>
+              <i style="--top:5%;--right:24%;--size:4px;--fly-x:20px;--fly-y:-54px;--turn:-110deg;--delay:90ms"></i>
+              <i style="--top:36%;--right:25%;--size:6px;--fly-x:46px;--fly-y:-28px;--turn:45deg;--delay:110ms"></i>
+              <i style="--top:68%;--right:22%;--size:4px;--fly-x:66px;--fly-y:34px;--turn:120deg;--delay:85ms"></i>
+              <i style="--top:88%;--right:28%;--size:7px;--fly-x:24px;--fly-y:50px;--turn:-65deg;--delay:120ms"></i>
+            </span>
+          </a>
           <a class="text-link" href="#process">See how it works</a>
         </div>
         <div class="hero-note"><span>No account</span><span>No setup</span><span>Saved locally</span></div>
