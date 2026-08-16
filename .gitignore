@@ -1,2 +1,3 @@
 .gstack/
 .DS_Store
+.roomary-cache.sqlite*

@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#171713">
+  <meta name="roomary-api" content="local">
   <title>Roomary — 3D story room editor</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -587,100 +588,24 @@
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import { TransformControls } from 'three/addons/controls/TransformControls.js';
+    import { CATALOG as catalog, compileScene, sceneHash, validateObjects } from './scene-core.mjs';
 
     const $ = (selector) => document.querySelector(selector);
     const STORAGE_KEY = 'roomary-state-v1';
+    const RECOVERY_KEY = `${STORAGE_KEY}-recovery`;
     const ROOM_WIDTH = 10;
     const ROOM_DEPTH = 8;
 
-    const catalog = [
-      { type: 'bed', label: 'Bed', terms: ['bed', 'cama'], color: '#a96249', position: [-2.4, -1.8] },
-      { type: 'desk', label: 'Desk', terms: ['desk', 'escritorio'], color: '#8b633f', position: [2.6, -2.5] },
-      { type: 'chair', label: 'Chair', terms: ['chair', 'silla'], color: '#bd8c57', position: [2.6, -0.9] },
-      { type: 'window', label: 'Window', terms: ['window', 'ventana'], color: '#8fb6bd', position: [-2.2, -3.9] },
-      { type: 'door', label: 'Door', terms: ['door', 'puerta'], color: '#71513a', position: [3.4, 3.9] },
-      { type: 'lamp', label: 'Lamp', terms: ['lamp', 'lampara', 'lámpara'], color: '#c79a45', position: [2.2, -2.3] },
-      { type: 'rug', label: 'Rug', terms: ['rug', 'carpet', 'alfombra'], color: '#9c4c3f', position: [0, 0.2] },
-      { type: 'wardrobe', label: 'Wardrobe', terms: ['wardrobe', 'closet', 'armario'], color: '#775238', position: [-4.1, 1.8] },
-      { type: 'bookshelf', label: 'Bookshelf', terms: ['bookshelf', 'bookcase', 'estanteria', 'estantería'], color: '#815f3f', position: [-4.25, -1.4] },
-      { type: 'sofa', label: 'Sofa', terms: ['sofa', 'sofá', 'couch'], color: '#6f7b68', position: [-1.8, 1.7] },
-      { type: 'table', label: 'Table', terms: ['table', 'mesa'], color: '#9a7046', position: [0.8, 0.8] },
-      { type: 'plant', label: 'Plant', terms: ['plant', 'planta'], color: '#55765a', position: [3.8, -2.7] }
-    ];
-
-    const normalize = (value) => value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const uid = () => crypto.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-    const clone = (value) => JSON.parse(JSON.stringify(value));
+    const clone = (value) => structuredClone(value);
     const withoutRoom = (rooms, id) => rooms.filter((room) => room.id !== id);
-    const itemFor = (type) => catalog.find((item) => item.type === type);
 
     console.assert(withoutRoom([{ id: 'keep' }, { id: 'remove' }], 'remove').length === 1, 'Room removal should keep other rooms');
 
-    function mentions(text, item) {
-      return item.terms.some((term) => new RegExp(`\\b${normalize(term)}s?\\b`, 'i').test(text));
-    }
-
-    function isRemoved(text, item) {
-      return item.terms.some((term) => {
-        const word = normalize(term);
-        return [
-          `(?:remove|without|missing|no|sin|falta|quita|retira)(?:\\s+\\w+){0,4}\\s+${word}s?`,
-          `${word}s?(?:\\s+\\w+){0,3}\\s+(?:is missing|are missing|falta|faltan)`
-        ].some((pattern) => new RegExp(pattern, 'i').test(text));
-      });
-    }
-
-    function colourFrom(text, item, fallback) {
-      const colours = {
-        red: '#9c4c3f', rojo: '#9c4c3f', roja: '#9c4c3f', blue: '#537897', azul: '#537897',
-        green: '#55765a', verde: '#55765a', yellow: '#d0a545', amarillo: '#d0a545', amarilla: '#d0a545',
-        black: '#34312d', negro: '#34312d', negra: '#34312d', white: '#e9e2d6', blanco: '#e9e2d6', blanca: '#e9e2d6',
-        oak: '#9a7046', roble: '#9a7046', brass: '#c79a45', laton: '#c79a45', latón: '#c79a45'
-      };
-      const term = item.terms.map(normalize).find((word) => text.includes(word));
-      const index = term ? text.indexOf(term) : -1;
-      const nearby = index < 0 ? '' : text.slice(Math.max(0, index - 28), index + term.length + 8);
-      const match = Object.keys(colours).find((word) => nearby.includes(normalize(word)));
-      return match ? colours[match] : fallback;
-    }
-
-    function parseRoom(description, current = [], patch = false) {
-      const text = normalize(description);
-      let objects = patch ? clone(current) : [];
-
-      for (const item of catalog) {
-        if (isRemoved(text, item)) {
-          objects = objects.filter((object) => object.type !== item.type);
-          continue;
-        }
-        if (!mentions(text, item)) continue;
-        if (patch && objects.some((object) => object.type === item.type)) continue;
-        objects.push({ id: uid(), type: item.type, label: item.label, color: colourFrom(text, item, item.color), x: item.position[0], z: item.position[1], rotation: 0 });
-      }
-
-      const has = (type) => objects.find((object) => object.type === type);
-      const bed = has('bed');
-      const windowObject = has('window');
-      if (bed && windowObject && /(?:bed|cama).{0,35}(?:beneath|under|bajo).{0,20}(?:window|ventana)/i.test(text)) {
-        bed.x = -2.2; bed.z = -2.35; windowObject.x = -2.2; windowObject.z = -3.9;
-      }
-      const desk = has('desk');
-      const door = has('door');
-      if (desk && door && /(?:desk|escritorio).{0,35}(?:facing|opposite|frente).{0,20}(?:door|puerta)/i.test(text)) {
-        desk.x = 2.5; desk.z = -2.45; door.x = 3.4; door.z = 3.9;
-      }
-      const plant = has('plant');
-      if (plant && desk && /(?:plant|planta).{0,30}(?:beside|next to|junto|al lado).{0,20}(?:desk|escritorio)/i.test(text)) {
-        plant.x = Math.min(4.1, desk.x + 1.25); plant.z = desk.z;
-      }
-      return objects;
-    }
-
-    // ponytail: this local parser is the demo fallback; replace it with structured LLM output when an API key and schema are available.
-    console.assert(parseRoom('A bed beneath a window and a red rug').length === 3, 'Room parser should find three objects');
-    console.assert(parseRoom('The chair is missing', [{ id: '1', type: 'chair' }], true).length === 0, 'Change parser should remove missing objects');
-
-    const demoObjects = parseRoom("A small bedroom with a bed beneath the north window, an oak desk facing the door, a brass lamp, a chair and a faded red rug.");
+    const DEMO_DESCRIPTION = "A small bedroom with a bed beneath the north window, an oak desk facing the door, a brass lamp, a chair and a faded red rug.";
+    const demoCompilation = compileScene(DEMO_DESCRIPTION);
+    const demoObjects = demoCompilation.objects;
+    const demoInterpretation = { graph: demoCompilation.graph, diagnostics: demoCompilation.diagnostics, provenance: { engine: 'local' } };
     const freshState = () => {
       const roomId = uid();
       return {
@@ -689,16 +614,129 @@
         rooms: [{
           id: roomId,
           name: "Mara's bedroom",
-          description: "A small bedroom with a bed beneath the north window, an oak desk facing the door, a brass lamp, a chair and a faded red rug.",
-          objects: demoObjects,
-          versions: [{ id: uid(), label: 'Original scene', createdAt: Date.now(), objects: clone(demoObjects) }]
+          description: DEMO_DESCRIPTION,
+          objects: clone(demoObjects),
+          interpretation: clone(demoInterpretation),
+          versions: [{ id: uid(), label: 'Original scene', createdAt: Date.now(), description: DEMO_DESCRIPTION, objects: clone(demoObjects), interpretation: clone(demoInterpretation) }]
         }]
       };
     };
 
-    let state;
-    try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || freshState(); }
-    catch { state = freshState(); }
+    let recoveredSavedData = false;
+    function interpretationFor(objects, source = {}) {
+      const byId = new Map(objects.map((object) => [object.id, object]));
+      const rawRelations = Array.isArray(source?.graph?.relations) ? source.graph.relations : [];
+      const relations = rawRelations.filter((relation) =>
+        relation && ['beneath', 'beside', 'facing'].includes(relation.type)
+        && byId.has(relation.subject) && byId.has(relation.target) && relation.subject !== relation.target
+      ).map((relation) => ({
+        type: relation.type, subject: relation.subject, target: relation.target,
+        subjectType: byId.get(relation.subject).type, targetType: byId.get(relation.target).type
+      }));
+      const entities = objects.map((object) => ({
+        id: object.id, type: object.type, label: object.label, color: object.color,
+        position: { x: object.x, z: object.z }, rotation: object.rotation
+      }));
+      const validation = validateObjects(objects);
+      const engine = ['openai', 'local', 'manual'].includes(source?.provenance?.engine) ? source.provenance.engine : 'local';
+      return {
+        graph: { entities, relations },
+        diagnostics: {
+          entities: entities.length, relations: relations.length, operations: [], warnings: validation.errors,
+          hash: validation.valid ? sceneHash(objects) : null, schemaVersion: 'roomary.scene.v1', valid: validation.valid
+        },
+        provenance: {
+          engine,
+          model: typeof source?.provenance?.model === 'string' ? source.provenance.model : null,
+          cacheHit: source?.provenance?.cacheHit === true,
+          warnings: Array.isArray(source?.provenance?.warnings) ? source.provenance.warnings.filter((warning) => typeof warning === 'string') : []
+        }
+      };
+    }
+
+    function validObjectSubset(objects) {
+      if (!Array.isArray(objects)) {
+        recoveredSavedData = true;
+        return [];
+      }
+      const valid = [];
+      for (const object of objects) {
+        if (validateObjects([...valid, object]).valid) valid.push(object);
+        else recoveredSavedData = true;
+      }
+      return valid;
+    }
+
+    function readState(serialized) {
+      if (!serialized) return null;
+      try {
+        const candidate = JSON.parse(serialized);
+        if (!candidate || !Array.isArray(candidate.rooms) || !candidate.rooms.length) {
+          recoveredSavedData = true;
+          return null;
+        }
+        const roomCandidates = candidate.rooms.filter((room) => room && typeof room === 'object');
+        if (roomCandidates.length !== candidate.rooms.length) recoveredSavedData = true;
+        const rooms = roomCandidates.map((room) => {
+          const objects = validObjectSubset(room.objects);
+          const objectsRecovered = !Array.isArray(room.objects) || objects.length !== room.objects.length;
+          if (!Array.isArray(room.versions)) recoveredSavedData = true;
+          const versions = Array.isArray(room.versions)
+            ? room.versions.filter((version) => {
+              const valid = version && typeof version === 'object' && Array.isArray(version.objects);
+              if (!valid) recoveredSavedData = true;
+              return valid;
+            }).map((version) => {
+              const versionObjects = validObjectSubset(version.objects);
+              const interpretation = version.interpretation && typeof version.interpretation === 'object'
+                ? interpretationFor(versionObjects, version.interpretation)
+                : undefined;
+              return {
+                ...version,
+                id: typeof version.id === 'string' && version.id ? version.id : uid(),
+                label: typeof version.label === 'string' && version.label ? version.label : 'Recovered version',
+                createdAt: Number.isFinite(version.createdAt) ? version.createdAt : Date.now(),
+                objects: versionObjects,
+                interpretation: versionObjects.length === version.objects.length ? interpretation : undefined
+              };
+            })
+            : [];
+          return {
+            ...room,
+            id: typeof room.id === 'string' && room.id ? room.id : uid(),
+            name: typeof room.name === 'string' && room.name ? room.name : 'Untitled room',
+            description: typeof room.description === 'string' ? room.description : '',
+            objects,
+            interpretation: !objectsRecovered && room.interpretation && typeof room.interpretation === 'object'
+              ? interpretationFor(objects, room.interpretation)
+              : undefined,
+            versions
+          };
+        });
+        if (!rooms.length) return null;
+        const activeRoomId = rooms.some((room) => room.id === candidate.activeRoomId) ? candidate.activeRoomId : rooms[0].id;
+        return {
+          ...candidate,
+          storyTitle: typeof candidate.storyTitle === 'string' && candidate.storyTitle ? candidate.storyTitle : 'Untitled story',
+          activeRoomId,
+          rooms
+        };
+      } catch (error) {
+        recoveredSavedData = true;
+        console.warn('Ignored invalid saved Roomary state.', error);
+        return null;
+      }
+    }
+
+    let serializedState = null;
+    try { serializedState = localStorage.getItem(STORAGE_KEY); } catch { /* persistence reports access failures */ }
+    let state = readState(serializedState) || freshState();
+    if (recoveredSavedData && serializedState) {
+      try { localStorage.setItem(RECOVERY_KEY, serializedState); }
+      catch (error) { console.warn('Could not preserve the rejected Roomary save.', error); }
+    }
+    const promptDrafts = new Map();
+    let canWrite = !navigator.locks;
     let selectedId = null;
     let toastTimer;
     let wallsVisible = true;
@@ -903,16 +941,53 @@
       requestAnimationFrame(tick);
     }
 
+    let saveErrorShown = false;
     function persist() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-      $('#save-state').textContent = 'Saved locally';
+      if (!canWrite) {
+        $('#save-state').textContent = 'View only · another tab is editing';
+        toast('This tab is view-only while another Roomary tab is open.');
+        return false;
+      }
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        $('#save-state').textContent = 'Saved locally';
+        saveErrorShown = false;
+        return true;
+      } catch (error) {
+        console.error('Could not persist Roomary state.', error);
+        $('#save-state').textContent = 'Save failed';
+        if (!saveErrorShown) toast('Local save failed. Export an image before closing.');
+        saveErrorShown = true;
+        return false;
+      }
     }
 
-    function addVersion(label) {
-      const room = activeRoom();
-      room.versions.unshift({ id: uid(), label, createdAt: Date.now(), objects: clone(room.objects), description: room.description });
+    function refreshInterpretation(room = activeRoom()) {
+      room.interpretation = interpretationFor(room.objects, room.interpretation);
+      room.interpretation.provenance = { engine: 'manual', model: null, cacheHit: false, warnings: [] };
+    }
+
+    function addVersion(label, room = activeRoom()) {
+      room.versions.unshift({
+        id: uid(), label, createdAt: Date.now(), objects: clone(room.objects), description: room.description,
+        interpretation: room.interpretation ? clone(room.interpretation) : undefined
+      });
       room.versions = room.versions.slice(0, 8);
-      persist();
+      return persist();
+    }
+
+    function updateWriteAccess() {
+      const controls = [
+        'story-title', 'new-room', 'rename-room', 'build-room', 'apply-change', 'clear-room',
+        'try-change', 'room-prompt', 'add-object', 'move-object', 'rotate-object', 'position-x',
+        'position-z', 'rotation-y', 'object-color', 'delete-object', 'save-version'
+      ];
+      controls.forEach((id) => { $(`#${id}`).disabled = !canWrite; });
+      $('#delete-room').disabled = !canWrite || state.rooms.length === 1;
+      document.querySelectorAll('#version-list .version-item').forEach((button) => { button.disabled = !canWrite; });
+      transform.enabled = canWrite;
+      if (!canWrite) $('#save-state').textContent = 'View only · another tab is editing';
+      else if ($('#save-state').textContent.startsWith('View only')) $('#save-state').textContent = 'Saved locally';
     }
 
     function syncUI() {
@@ -920,8 +995,12 @@
       $('#story-title').value = state.storyTitle;
       $('#story-crumb').textContent = state.storyTitle;
       $('#room-title').textContent = room.name;
-      $('#room-prompt').value = room.description;
-      $('#word-count').textContent = `${room.description.trim().split(/\s+/).filter(Boolean).length} words`;
+      $('#room-prompt').value = promptDrafts.get(room.id) ?? room.description;
+      const diagnostics = room.interpretation?.diagnostics;
+      const semanticCount = diagnostics?.valid
+        ? ` · ${diagnostics.entities} entities · ${diagnostics.relations} ${diagnostics.relations === 1 ? 'link' : 'links'}`
+        : '';
+      $('#word-count').textContent = `${room.description.trim().split(/\s+/).filter(Boolean).length} words${semanticCount}`;
       $('#delete-room').disabled = state.rooms.length === 1;
 
       $('#room-list').innerHTML = state.rooms.map((item) => `
@@ -954,6 +1033,7 @@
       } else {
         $('#selected-title').textContent = 'Selected object';
       }
+      updateWriteAccess();
     }
 
     function escapeHtml(value) {
@@ -970,7 +1050,7 @@
     }
 
     function syncTransform() {
-      if (!selectedId) return;
+      if (!canWrite || !selectedId) return;
       const object = activeRoom().objects.find((item) => item.id === selectedId);
       const group = meshById.get(selectedId);
       if (!object || !group) return;
@@ -981,6 +1061,7 @@
       object.z = Number(group.position.z.toFixed(2));
       const degrees = THREE.MathUtils.radToDeg(group.rotation.y);
       object.rotation = Number((THREE.MathUtils.euclideanModulo(degrees + 180, 360) - 180).toFixed(1));
+      refreshInterpretation();
       persist();
       syncUI();
     }
@@ -999,7 +1080,7 @@
 
     function updateRotationKnob() {
       const group = transform.object;
-      rotationKnob.visible = Boolean(group);
+      rotationKnob.visible = canWrite && Boolean(group);
       if (!rotationKnob.visible) return;
       const radius = 1.15 / camera.zoom;
       const angle = group.rotation.y - Math.PI / 4;
@@ -1019,26 +1100,114 @@
       toastTimer = setTimeout(() => element.classList.remove('visible'), 2200);
     }
 
-    function buildFromText(asChange) {
+    const objectLabel = (type) => catalog.find((item) => item.type === type)?.label || type;
+
+    function changeSummary(operations) {
+      const changes = [];
+      for (const operation of operations || []) {
+        if (operation.kind === 'add') changes.push(`+ ${objectLabel(operation.type)}`);
+        if (operation.kind === 'remove') changes.push(`− ${objectLabel(operation.type)}`);
+        if (operation.kind === 'recolor') changes.push(`${objectLabel(operation.type)} recoloured`);
+      }
+      const relations = (operations || []).filter((operation) => operation.kind === 'relate').length;
+      if (relations) changes.push(`${relations} ${relations === 1 ? 'relation' : 'relations'}`);
+      return changes.slice(0, 3).join(' · ');
+    }
+
+    async function requestCompilation(description, current, patch, relations) {
+      const local = () => ({ ...compileScene(description, current, patch, { relations }), provenance: { engine: 'local', model: null, cacheHit: false, warnings: [] } });
+      if (document.querySelector('meta[name="roomary-api"]')?.content !== 'server') return local();
+      try {
+        const response = await fetch('./api/scenes/compile', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ description, current, patch, relations }),
+          signal: AbortSignal.timeout(10_000)
+        });
+        if (!response.ok) return local();
+        const compilation = await response.json();
+        if (!compilation?.diagnostics?.valid || !validateObjects(compilation.objects).valid) return local();
+        return compilation;
+      } catch {
+        return local();
+      }
+    }
+
+    let buildInFlight = false;
+    async function buildFromText(asChange) {
+      if (buildInFlight) return;
       const room = activeRoom();
-      const description = $('#room-prompt').value.trim();
+      const roomId = room.id;
+      const sourceObjects = clone(room.objects);
+      const sourceHash = sceneHash(sourceObjects);
+      const sourceRelations = clone(room.interpretation?.graph?.relations || []);
+      const sourceRelationState = JSON.stringify(sourceRelations);
+      const sourcePrompt = $('#room-prompt').value;
+      const description = sourcePrompt.trim();
       if (!description) { toast('Describe the room first.'); return; }
-      const nextObjects = parseRoom(description, room.objects, asChange);
-      if (!nextObjects.length && !asChange) { toast('Try naming a bed, desk, chair, window, door, rug, lamp, sofa or plant.'); return; }
-      room.description = description;
-      room.objects = nextObjects;
-      addVersion(asChange ? 'Scene change' : 'Built from description');
-      renderRoom(true);
-      toast(asChange ? 'Scene updated and versioned.' : `${nextObjects.length} objects placed.`);
+      buildInFlight = true;
+      $('#build-room').disabled = true;
+      $('#apply-change').disabled = true;
+      $('#save-state').textContent = 'Interpreting prose…';
+      try {
+        const compilation = await requestCompilation(description, sourceObjects, asChange, sourceRelations);
+        const targetRoom = state.rooms.find((item) => item.id === roomId);
+        if (!targetRoom) {
+          $('#save-state').textContent = 'Saved locally';
+          toast('That room was removed before interpretation finished.');
+          return;
+        }
+        const currentPrompt = promptDrafts.get(roomId) ?? targetRoom.description;
+        if (sceneHash(targetRoom.objects) !== sourceHash
+          || JSON.stringify(targetRoom.interpretation?.graph?.relations || []) !== sourceRelationState
+          || currentPrompt !== sourcePrompt) {
+          $('#save-state').textContent = 'Saved locally';
+          toast('The scene or draft changed while it was being interpreted. Try again.');
+          return;
+        }
+        if (!compilation.objects.length && !asChange) {
+          $('#save-state').textContent = 'Saved locally';
+          toast('Try naming a bed, desk, chair, window, door, rug, lamp, sofa or plant.');
+          return;
+        }
+        addVersion(asChange ? 'Before scene change' : 'Before rebuild', targetRoom);
+        targetRoom.description = description;
+        targetRoom.objects = compilation.objects;
+        targetRoom.interpretation = { graph: compilation.graph, diagnostics: compilation.diagnostics, provenance: compilation.provenance };
+        promptDrafts.delete(roomId);
+        const saved = addVersion(asChange ? 'Scene change' : 'Built from description', targetRoom);
+        if (state.activeRoomId !== roomId) {
+          syncUI();
+          if (saved) toast(`${targetRoom.name} updated in the background.`);
+          return;
+        }
+        renderRoom(true);
+        const summary = changeSummary(compilation.diagnostics.operations);
+        const engine = compilation.provenance?.engine === 'openai' ? 'AI plan' : 'Local compiler';
+        const relationLabel = compilation.diagnostics.relations === 1 ? 'relation' : 'relations';
+        if (saved) $('#save-state').textContent = `${compilation.diagnostics.entities} entities · ${compilation.diagnostics.relations} ${relationLabel} · ${engine}`;
+        const relationCount = compilation.diagnostics.relations;
+        if (saved) toast(asChange && summary ? `Scene updated · ${summary}` : `${compilation.objects.length} objects placed · ${relationCount} ${relationCount === 1 ? 'relation' : 'relations'}`);
+      } catch (error) {
+        console.error('Scene compilation failed.', error);
+        $('#save-state').textContent = 'Saved locally';
+        toast('Could not interpret that description. Your scene is unchanged.');
+      } finally {
+        buildInFlight = false;
+        $('#build-room').disabled = false;
+        $('#apply-change').disabled = false;
+      }
     }
 
     $('#build-room').addEventListener('click', () => buildFromText(false));
     $('#apply-change').addEventListener('click', () => buildFromText(true));
     $('#clear-room').addEventListener('click', () => {
+      addVersion('Before clear');
       activeRoom().objects = [];
-      addVersion('Room cleared');
+      refreshInterpretation();
+      const saved = addVersion('Room cleared');
       renderRoom();
-      toast('Room cleared. The previous version is safe.');
+      if (saved) toast('Room cleared. The previous version is safe.');
     });
 
     $('#try-change').addEventListener('click', () => {
@@ -1048,6 +1217,7 @@
     });
 
     $('#room-prompt').addEventListener('input', (event) => {
+      promptDrafts.set(state.activeRoomId, event.target.value);
       $('#word-count').textContent = `${event.target.value.trim().split(/\s+/).filter(Boolean).length} words`;
     });
 
@@ -1078,7 +1248,8 @@
       const name = window.prompt('Rename this place', room.name)?.trim();
       if (!name || name === room.name) return;
       room.name = name;
-      persist(); syncUI(); toast('Room renamed.');
+      const saved = persist(); syncUI();
+      if (saved) toast('Room renamed.');
     });
 
     $('#delete-room').addEventListener('click', () => {
@@ -1086,8 +1257,10 @@
       const room = activeRoom();
       if (!window.confirm(`Delete “${room.name}”? This cannot be undone.`)) return;
       state.rooms = withoutRoom(state.rooms, room.id);
+      promptDrafts.delete(room.id);
       state.activeRoomId = state.rooms[0].id;
-      persist(); renderRoom(); toast('Room deleted.');
+      const saved = persist(); renderRoom();
+      if (saved) toast('Room deleted.');
     });
 
     $('#object-chips').addEventListener('click', (event) => {
@@ -1105,6 +1278,7 @@
       if (!item) return;
       const object = { id: uid(), type: item.type, label: item.label, color: item.color, x: 0, z: 0, rotation: 0 };
       activeRoom().objects.push(object);
+      refreshInterpretation();
       persist(); renderRoom(true); selectObject(object.id);
     });
 
@@ -1116,6 +1290,7 @@
         object[key] = Number(event.target.value);
         meshById.get(object.id).position[key] = object[key];
         $(`#${id}-value`).value = object[key].toFixed(1);
+        refreshInterpretation();
         persist();
       });
     });
@@ -1126,6 +1301,7 @@
       object.rotation = Number(event.target.value);
       meshById.get(object.id).rotation.y = THREE.MathUtils.degToRad(object.rotation);
       $('#rotation-y-value').value = `${object.rotation}°`;
+      refreshInterpretation();
       persist();
     });
 
@@ -1133,17 +1309,21 @@
       const object = activeRoom().objects.find((item) => item.id === selectedId);
       if (!object) return;
       object.color = event.target.value;
+      refreshInterpretation();
       persist(); renderRoom(); selectObject(object.id);
     });
 
     $('#delete-object').addEventListener('click', () => {
       const room = activeRoom();
       room.objects = room.objects.filter((item) => item.id !== selectedId);
-      persist(); renderRoom(); toast('Object removed.');
+      refreshInterpretation(room);
+      const saved = persist(); renderRoom();
+      if (saved) toast('Object removed.');
     });
 
     $('#save-version').addEventListener('click', () => {
-      addVersion('Manual edit'); syncUI(); toast('Version saved.');
+      const saved = addVersion('Manual edit'); syncUI();
+      if (saved) toast('Version saved.');
     });
 
     $('#version-list').addEventListener('click', (event) => {
@@ -1152,10 +1332,35 @@
       const room = activeRoom();
       const version = room.versions.find((item) => item.id === button.dataset.versionId);
       if (!version) return;
+      addVersion('Before restore');
       room.objects = clone(version.objects);
-      if (version.description) room.description = version.description;
-      addVersion(`Restored: ${version.label}`);
-      renderRoom(true); toast('Version restored.');
+      if (typeof version.description === 'string') room.description = version.description;
+      room.interpretation = version.interpretation ? clone(version.interpretation) : undefined;
+      promptDrafts.delete(room.id);
+      const saved = addVersion(`Restored: ${version.label}`);
+      renderRoom(true);
+      if (saved) toast('Version restored.');
+    });
+
+    window.addEventListener('storage', (event) => {
+      if (event.key !== STORAGE_KEY || !event.newValue) return;
+      recoveredSavedData = false;
+      const incoming = readState(event.newValue);
+      if (recoveredSavedData) {
+        try { localStorage.setItem(RECOVERY_KEY, event.newValue); } catch { /* persistence already reports failures */ }
+      }
+      if (!incoming) {
+        toast('Ignored invalid data from another tab.');
+        return;
+      }
+      const localRoomId = state.activeRoomId;
+      state = incoming;
+      if (state.rooms.some((room) => room.id === localRoomId)) state.activeRoomId = localRoomId;
+      renderRoom();
+      $('#save-state').textContent = canWrite
+        ? (recoveredSavedData ? 'Recovered local data' : 'Synced from another tab')
+        : 'View only · synced from editor tab';
+      if (recoveredSavedData) toast('Recovered valid items; the original save was kept.');
     });
 
     $('#reset-view').addEventListener('click', () => {
@@ -1198,7 +1403,7 @@
     renderer.domElement.addEventListener('pointerdown', (event) => {
       if (transform.dragging) return;
       updatePointer(event);
-      if (rotationKnob.visible && raycaster.intersectObject(rotationKnob)[0]) {
+      if (canWrite && rotationKnob.visible && raycaster.intersectObject(rotationKnob)[0]) {
         const group = transform.object;
         rotationPlane.constant = 0;
         if (!raycaster.ray.intersectPlane(rotationPlane, rotationPoint)) return;
@@ -1265,6 +1470,19 @@
 
     buildShell();
     renderRoom();
+    if (navigator.locks) {
+      // ponytail: one writer per origin; use per-room locks only if simultaneous tab editing becomes a requirement.
+      navigator.locks.request(`${STORAGE_KEY}-writer`, async () => {
+        canWrite = true;
+        updateWriteAccess();
+        await new Promise((resolve) => window.addEventListener('pagehide', resolve, { once: true }));
+      }).catch((error) => {
+        console.warn('Web Locks unavailable; continuing in single-tab mode.', error);
+        canWrite = true;
+        updateWriteAccess();
+      });
+    }
+    if (recoveredSavedData) toast('Recovered valid items; the original save was kept.');
     resize();
     loop();
   </script>
